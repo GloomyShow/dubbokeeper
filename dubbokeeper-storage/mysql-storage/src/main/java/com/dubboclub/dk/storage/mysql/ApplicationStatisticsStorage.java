@@ -1,6 +1,7 @@
 package com.dubboclub.dk.storage.mysql;
 
 import com.alibaba.dubbo.common.utils.ConfigUtils;
+import com.dubboclub.dk.storage.model.ApplicationInfo;
 import com.dubboclub.dk.storage.model.Statistics;
 import com.dubboclub.dk.storage.mysql.mapper.ApplicationMapper;
 import com.dubboclub.dk.storage.mysql.mapper.StatisticsMapper;
@@ -48,7 +49,8 @@ public class ApplicationStatisticsStorage  extends Thread{
             "  `remoteType` varchar(20) DEFAULT NULL COMMENT '远程应用类型',\n" +
             "  PRIMARY KEY (`id`),\n" +
             "  KEY `time-index` (`timestamp`),\n" +
-            "  KEY `method-index` (`method`)\n" +
+            "  KEY `method-index` (`method`),\n" +
+            "  KEY `service-index` (`serviceInterface`)\n"+
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n";
 
     private StatisticsMapper statisticsMapper;
@@ -73,14 +75,16 @@ public class ApplicationStatisticsStorage  extends Thread{
 
     private volatile boolean isWriting=false;
 
+    private int type;
+
     private static final int WRITE_INTERVAL= Integer.parseInt(ConfigUtils.getProperty("mysql.commit.interval", "100"));
 
 
-    public ApplicationStatisticsStorage(ApplicationMapper applicationMapper,StatisticsMapper statisticsMapper,DataSource dataSource,TransactionTemplate transactionTemplate,String application){
-        this(applicationMapper,statisticsMapper,dataSource,transactionTemplate,application,false);
+    public ApplicationStatisticsStorage(ApplicationMapper applicationMapper,StatisticsMapper statisticsMapper,DataSource dataSource,TransactionTemplate transactionTemplate,String application,int type){
+        this(applicationMapper,statisticsMapper,dataSource,transactionTemplate,application,type,false);
     }
 
-    public ApplicationStatisticsStorage(ApplicationMapper applicationMapper,StatisticsMapper statisticsMapper,DataSource dataSource,TransactionTemplate transactionTemplate,String application,boolean needCreateTable){
+    public ApplicationStatisticsStorage(ApplicationMapper applicationMapper,StatisticsMapper statisticsMapper,DataSource dataSource,TransactionTemplate transactionTemplate,String application,int type,boolean needCreateTable){
         this.application = application;
         this.statisticsMapper = statisticsMapper;
         this.dataSource = dataSource;
@@ -89,20 +93,24 @@ public class ApplicationStatisticsStorage  extends Thread{
         this.setName(application+"_statisticsWriter");
         this.setDaemon(true);
         if(needCreateTable){
-            this.applicationMapper.addApplication(application);
+            ApplicationInfo applicationInfo = new ApplicationInfo();
+            applicationInfo.setApplicationName(application);
+            applicationInfo.setApplicationType(type);
+            this.applicationMapper.addApplication(applicationInfo);
             createNewAppTable(application);
         }
         init();
+        this.type=type;
     }
 
 
     private void init(){
         long end = System.currentTimeMillis();
         long start = System.currentTimeMillis()-24*60*60*1000;
-        Long concurrent =statisticsMapper.queryMaxConcurrent(application,start,end);
-        Long elapsed = statisticsMapper.queryMaxElapsed(application,start,end);
-        Integer fault = statisticsMapper.queryMaxFault(application,start,end);
-        Integer success = statisticsMapper.queryMaxSuccess(application,start,end);
+        Long concurrent =statisticsMapper.queryMaxConcurrent(application,null,start,end);
+        Long elapsed = statisticsMapper.queryMaxElapsed(application,null,start,end);
+        Integer fault = statisticsMapper.queryMaxFault(application,null,start,end);
+        Integer success = statisticsMapper.queryMaxSuccess(application,null,start,end);
         maxConcurrent =concurrent==null?0:concurrent;
         maxElapsed = elapsed==null?0:elapsed;
         maxFault=fault==null?0:fault;
@@ -129,6 +137,14 @@ public class ApplicationStatisticsStorage  extends Thread{
         }
         if(maxElapsed<statistics.getElapsed()){
             maxElapsed = statistics.getElapsed();
+        }
+        if((type==0&&statistics.getType()== Statistics.ApplicationType.PROVIDER)||(type==1&&statistics.getType()== Statistics.ApplicationType.CONSUMER)){
+            synchronized (this){
+                if(type!=2){
+                    applicationMapper.updateAppType(application,2);
+                    type=2;
+                }
+            }
         }
     }
 
@@ -213,5 +229,9 @@ public class ApplicationStatisticsStorage  extends Thread{
 
     public String getApplication() {
         return application;
+    }
+
+    public int getType() {
+        return type;
     }
 }

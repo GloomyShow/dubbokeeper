@@ -12,6 +12,6 @@ else
 	JAVA=java
 fi
 
-DUBBO_PROPERTIES="dubbo-lucene.properties"
+DUBBO_PROPERTIES="dubbo-mysql.properties"
 
 "$JAVA" "-Dmonitor.log.home=${LOG_HOME}" "-Ddubbo.properties.file=${DUBBO_PROPERTIES}" -cp $CLASSPATH "${MAINCLASS}" start
