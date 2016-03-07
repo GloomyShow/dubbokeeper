@@ -22,7 +22,6 @@ import org.apache.lucene.search.grouping.term.TermSecondPassGroupingCollector;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MMapDirectory;
 import org.apache.lucene.store.NIOFSDirectory;
-import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.util.BytesRef;
 import org.springframework.beans.factory.InitializingBean;
 
@@ -773,7 +772,7 @@ public class LuceneStatisticsStorage implements StatisticsStorage,InitializingBe
                 luceneDirectory = new NIOFSDirectory(path);
                 break;
             case SIMPLE:
-                luceneDirectory = new SimpleFSDirectory(path);
+                luceneDirectory = new NIOFSDirectory(path);
                 break;
         }
         return luceneDirectory;
